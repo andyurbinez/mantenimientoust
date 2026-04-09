@@ -1,102 +1,95 @@
 import psutil
 import platform
 import os
-import socket
-from fpdf import FPDF
 from datetime import datetime
+from fpdf import FPDF
 
-# Identidad de Marca
-MARCA = "URBIÑEZ SERVICIOS TECNOLOGICOS"
-SISTEMA = platform.system()
-
-class PDF(FPDF):
-    def header(self):
-        self.set_font('Arial', 'B', 16)
-        self.cell(0, 10, MARCA, 0, 1, 'C')
-        self.set_font('Arial', 'I', 10)
-        self.cell(0, 10, 'Soporte Tecnico e Infraestructura - Milan, IT', 0, 1, 'C')
-        self.ln(10)
-
-def obtener_datos_completos():
-    # Ajuste de ruta para espacio REAL (Android vs Windows)
-    ruta_disco = '/sdcard' if os.path.exists('/sdcard') else '/'
-    disco = psutil.disk_usage(ruta_disco)
+def obtener_info_sistema():
+    # Análisis de Salud (La función que "vende")
     ram = psutil.virtual_memory()
+    disco = psutil.disk_usage('/')
     
-    return {
-        "so": f"{SISTEMA} {platform.release()}",
-        "procesador": platform.processor() or "Procesador Multinucleo ARM/x86",
+    # Lógica de salud
+    if ram.percent > 85 or disco.percent > 90:
+        estado_salud = "CRITICO - Requiere Intervencion Inmediata"
+    elif ram.percent > 60 or disco.percent > 70:
+        estado_salud = "ADVERTENCIA - Se recomienda Mantenimiento"
+    else:
+        estado_salud = "OPTIMO - Sistema Saludable"
+
+    info = {
+        "sistema": platform.system(),
+        "version": platform.release(),
         "maquina": platform.machine(),
         "ram_total": f"{ram.total / (1024**3):.2f} GB",
-        "ram_uso_pct": ram.percent,
-        "disco_capacidad": f"{disco.total / (1024**3):.2f} GB",
+        "ram_uso_pct": f"{ram.percent}%",
+        "disco_total": f"{disco.total / (1024**3):.2f} GB",
         "disco_libre": f"{disco.free / (1024**3):.2f} GB",
-        "disco_uso_pct": disco.percent
+        "disco_uso_pct": disco.percent,
+        "salud": estado_salud
     }
-
-def auditoria_red():
-    # Concepto Cisco: Verificacion de puertos criticos
-    puertos = [21, 22, 80, 443, 445, 3389]
-    abiertos = []
-    for p in puertos:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(0.01)
-            if s.connect_ex(('127.0.0.1', p)) == 0: abiertos.append(p)
-    return "ESTADO SEGURO" if not abiertos else f"ALERTA: Puertos {abiertos} activos"
+    return info
 
 def generar_reporte():
-    info = obtener_datos_completos()
-    red = auditoria_red()
-    
-    # Visual en Pantalla (Termux)
-    os.system('cls' if SISTEMA == 'Windows' else 'clear')
-    print("="*50)
-    print(f" {MARCA} ".center(50, "="))
-    print("="*50)
-    print(f"\n[+] SISTEMA:      {info['so']}")
-    print(f"[+] PROCESADOR:   {info['procesador']} ({info['maquina']})")
-    print(f"[+] RAM TOTAL:    {info['ram_total']} (Uso: {info['ram_uso_pct']}%)")
-    print(f"[+] DISCO TOTAL:  {info['disco_capacidad']}")
-    print(f"[+] DISCO LIBRE:  {info['disco_libre']} ({100 - info['disco_uso_pct']:.1f}% disponible)")
-    print(f"[+] SEGURIDAD:    {red}")
-    print("\n" + "="*50)
-
-    # Generar PDF Profesional
-    pdf = PDF()
+    info = obtener_info_sistema()
+    pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", size=12)
+    
+    # Encabezado Profesional
+    pdf.set_font("Arial", "B", 16)
+    pdf.set_text_color(33, 37, 41)
+    pdf.cell(0, 10, "URBINEZ SERVICIOS TECNOLOGICOS", ln=True, align="C")
+    pdf.set_font("Arial", "I", 10)
+    pdf.cell(0, 10, f"Reporte Generado: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", ln=True, align="C")
+    pdf.ln(10)
+
+    # SECCIÓN DE SALUD (Lo que impresiona al cliente)
     pdf.set_fill_color(240, 240, 240)
-    pdf.cell(0, 10, f"FECHA DEL REPORTE: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=True, fill=True)
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, "ESTADO GENERAL DE SALUD DEL EQUIPO:", ln=True, fill=True)
+    pdf.set_font("Arial", "B", 14)
     
+    # Color según estado
+    if "OPTIMO" in info["salud"]:
+        pdf.set_text_color(0, 128, 0) # Verde
+    elif "ADVERTENCIA" in info["salud"]:
+        pdf.set_text_color(255, 140, 0) # Naranja
+    else:
+        pdf.set_text_color(220, 20, 60) # Rojo
+        
+    pdf.cell(0, 12, f" >> {info['salud']}", ln=True, align="C")
     pdf.ln(5)
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(0, 10, "1. ESPECIFICACIONES DE HARDWARE", ln=True)
-    pdf.set_font("Arial", size=11)
-    pdf.cell(0, 8, f"- Procesador: {info['procesador']}", ln=True)
-    pdf.cell(0, 8, f"- Arquitectura: {info['maquina']}", ln=True)
-    pdf.cell(0, 8, f"- Memoria RAM: {info['ram_total']} (Carga: {info['ram_uso_pct']}%)", ln=True)
     
-    pdf.ln(5)
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(0, 10, "2. ALMACENAMIENTO REAL", ln=True)
+    # Detalle Técnico
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, "DETALLES TECNICOS:", ln=True)
     pdf.set_font("Arial", size=11)
-    pdf.cell(0, 8, f"- Capacidad Total: {info['disco_capacidad']}", ln=True)
-    pdf.cell(0, 8, f"- Espacio Disponible: {info['disco_libre']}", ln=True)
+    pdf.cell(0, 8, f"[+] Sistema: {info['sistema']} {info['version']}", ln=True)
+    pdf.cell(0, 8, f"[+] RAM Total: {info['ram_total']} (Uso: {info['ram_uso_pct']})", ln=True)
+    pdf.cell(0, 8, f"[+] Capacidad Disco: {info['disco_total']}", ln=True)
+    pdf.cell(0, 8, f"[+] Espacio Libre: {info['disco_libre']} ({100-info['disco_uso_pct']}% disponible)", ln=True)
     
-    # Barra visual de disco en PDF
+    # Barra visual de disco
     pdf.ln(5)
     pdf.set_draw_color(50, 50, 50)
-    pdf.cell(info['disco_uso_pct'], 10, f"USO: {info['disco_uso_pct']}%", fill=True, border=1)
-    
-    # Guardar en Descargas automáticamente
-    ruta_final = "/sdcard/Download/Reporte_Urbinez.pdf" if SISTEMA != "Windows" else os.path.join(os.path.expanduser('~'), 'Downloads', 'Reporte_Urbinez.pdf')
-    
+    pdf.cell(info['disco_uso_pct'], 10, f"USO DISCO: {info['disco_uso_pct']}%", border=1, fill=True)
+
+    # Guardar con fecha y hora para evitar sobrescribir
+    ahora = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ruta_final = f"/sdcard/Download/Reporte_Urbinez_{ahora}.pdf"
+
     try:
         pdf.output(ruta_final)
-        print(f"[OK] Reporte guardado en: {ruta_final}")
-    except:
-        pdf.output("Reporte_Urbinez.pdf")
-        print("[!] Guardado en carpeta local (Verifica permisos de almacenamiento)")
+        print("\n" + "="*40)
+        print("   URBIÑEZ SERVICIOS TECNOLOGICOS")
+        print("="*40)
+        print(f"[+] SALUD: {info['salud']}")
+        print(f"[OK] Reporte profesional guardado en Descargas.")
+        print("="*40)
+    except Exception as e:
+        pdf.output(f"Reporte_{ahora}.pdf")
+        print(f"[!] Error al guardar en Descargas, guardado en carpeta local.")
 
 if __name__ == "__main__":
     generar_reporte()
